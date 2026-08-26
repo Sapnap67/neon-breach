@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 2026-08-26
+
+- Fixed unreliable movement input by tracking held key-down/key-up events.
+- Added arrow-key movement alongside WASD.
+- Added mouse, number row, numpad and keyboard navigation to the upgrade screen.
+- Added hover/selection feedback and clearer upgrade instructions.
+
 ## 0.1.1 - 2026-08-26
 
 - Added Chinese section comments and function explanations throughout the main Python files.

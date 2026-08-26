@@ -75,6 +75,9 @@ class Game:
         self.big = pygame.font.SysFont("consolas", 64, bold=True)
         self.small = pygame.font.SysFont("consolas", 16)
         self.state = "menu"
+        # 自己记录持续按住的键，比每帧查询键盘状态更稳定。
+        self.held_keys: set[int] = set()
+        self.upgrade_cursor = 0
         self.high = safe_load().get("high_score", 0)
         self.reset()
 
@@ -89,6 +92,34 @@ class Game:
         self.time = self.shot_t = self.spawn_t = self.dash_t = 0.0
         self.flash = self.shake = 0.0
         self.choices = []
+        self.held_keys.clear()
+        self.upgrade_cursor = 0
+
+    def movement_vector(self):
+        """根据当前按住的 WASD 或方向键计算移动方向。"""
+
+        left = pygame.K_a in self.held_keys or pygame.K_LEFT in self.held_keys
+        right = pygame.K_d in self.held_keys or pygame.K_RIGHT in self.held_keys
+        up = pygame.K_w in self.held_keys or pygame.K_UP in self.held_keys
+        down = pygame.K_s in self.held_keys or pygame.K_DOWN in self.held_keys
+        move = pygame.Vector2(right - left, down - up)
+        if move.length_squared():
+            move = move.normalize()
+        return move
+
+    def upgrade_rects(self):
+        """返回三张升级卡片的位置，绘制和鼠标点击共用同一套坐标。"""
+
+        return [pygame.Rect(180 + i * 320, 260, 280, 190) for i in range(len(self.choices))]
+
+    def choose_upgrade(self, index):
+        """选择升级并返回战斗；无效编号直接忽略。"""
+
+        if self.state != "upgrade" or not 0 <= index < len(self.choices):
+            return
+        self.stats, self.hp = apply_upgrade(self.stats, self.hp, self.choices[index])
+        self.state = "playing"
+        self.held_keys.clear()
 
     def spawn_enemy(self):
         """在屏幕四周随机生成一种敌人，并随生存时间增强它。"""
@@ -133,11 +164,7 @@ class Game:
         self.dash_t -= dt
 
         # ---------- 玩家移动 ----------
-        keys = pygame.key.get_pressed()
-        move = pygame.Vector2(keys[pygame.K_d] - keys[pygame.K_a], keys[pygame.K_s] - keys[pygame.K_w])
-        if move.length_squared():
-            # normalize 让斜向移动不会比横向移动更快。
-            move = move.normalize()
+        move = self.movement_vector()
         self.player += move * self.stats.speed * dt
         self.player.x, self.player.y = clamp(self.player.x, 20, W - 20), clamp(self.player.y, 20, H - 20)
 
@@ -271,13 +298,18 @@ class Game:
             veil.fill((2, 5, 15, 220))
             self.screen.blit(veil, (0, 0))
             self.text("SELECT AN INJECTION", (W/2,145), CYAN, self.big, True)
-            for i, name in enumerate(self.choices):
-                rect = pygame.Rect(180 + i*320, 260, 280, 190)
-                pygame.draw.rect(self.screen, (12, 24, 45), rect)
-                pygame.draw.rect(self.screen, CYAN, rect, 2)
+            mouse_pos = pygame.mouse.get_pos()
+            for i, (name, rect) in enumerate(zip(self.choices, self.upgrade_rects())):
+                hovered = rect.collidepoint(mouse_pos)
+                selected = i == self.upgrade_cursor
+                fill = (20, 40, 68) if hovered or selected else (12, 24, 45)
+                border = PINK if hovered else CYAN
+                pygame.draw.rect(self.screen, fill, rect)
+                pygame.draw.rect(self.screen, border, rect, 4 if hovered or selected else 2)
                 self.text(str(i+1), (rect.centerx, rect.y+35), PINK, self.big, True)
                 self.text(name, (rect.centerx, rect.y+105), WHITE, self.font, True)
                 self.text(UPGRADES[name], (rect.centerx, rect.y+145), MUTED, self.small, True)
+            self.text("CLICK A CARD  |  1 2 3  |  LEFT/RIGHT + ENTER", (W/2, 500), MUTED, self.small, True)
         if self.flash:
             f = pygame.Surface((W, H), pygame.SRCALPHA)
             f.fill((255, 30, 70, 65))
@@ -296,7 +328,10 @@ class Game:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return
+                if event.type == pygame.KEYUP:
+                    self.held_keys.discard(event.key)
                 if event.type == pygame.KEYDOWN:
+                    self.held_keys.add(event.key)
                     if event.key == pygame.K_RETURN and self.state == "menu":
                         self.reset()
                         self.state = "playing"
@@ -305,21 +340,33 @@ class Game:
                     elif event.key == pygame.K_r and self.state == "dead":
                         self.reset()
                         self.state = "playing"
-                    elif self.state == "upgrade" and event.unicode in "123":
-                        idx = int(event.unicode) - 1
-                        if idx < len(self.choices):
-                            self.stats, self.hp = apply_upgrade(self.stats, self.hp, self.choices[idx])
-                            self.state = "playing"
+                    elif self.state == "upgrade" and event.key in (
+                        pygame.K_1, pygame.K_2, pygame.K_3,
+                        pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
+                    ):
+                        number_keys = {
+                            pygame.K_1: 0, pygame.K_KP1: 0,
+                            pygame.K_2: 1, pygame.K_KP2: 1,
+                            pygame.K_3: 2, pygame.K_KP3: 2,
+                        }
+                        self.choose_upgrade(number_keys[event.key])
+                    elif self.state == "upgrade" and event.key in (pygame.K_LEFT, pygame.K_a):
+                        self.upgrade_cursor = (self.upgrade_cursor - 1) % len(self.choices)
+                    elif self.state == "upgrade" and event.key in (pygame.K_RIGHT, pygame.K_d):
+                        self.upgrade_cursor = (self.upgrade_cursor + 1) % len(self.choices)
+                    elif self.state == "upgrade" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        self.choose_upgrade(self.upgrade_cursor)
                     elif event.key == pygame.K_SPACE and self.state == "playing" and self.dash_t <= 0:
-                        keys = pygame.key.get_pressed()
-                        move = pygame.Vector2(
-                            keys[pygame.K_d] - keys[pygame.K_a],
-                            keys[pygame.K_s] - keys[pygame.K_w],
-                        )
+                        move = self.movement_vector()
                         if move.length_squared():
                             self.player += move.normalize() * 125
                             self.dash_t = self.stats.dash_cooldown
                             self.burst(self.player, CYAN, 20)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "upgrade":
+                    for index, rect in enumerate(self.upgrade_rects()):
+                        if rect.collidepoint(event.pos):
+                            self.choose_upgrade(index)
+                            break
             self.update(dt)
             self.draw()
 
