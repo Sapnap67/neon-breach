@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-08-26
+
+- Added Chinese section comments and function explanations throughout the main Python files.
+- Expanded the Chinese manual with a map of the code structure.
+- Reformatted dense statements to make the game loop easier to read without changing gameplay.
+
 ## 0.1.0 - 2026-08-26
 
 - Added the first playable arena-survival loop.

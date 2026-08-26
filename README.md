@@ -21,3 +21,9 @@ py -3 -m venv .venv
 ```
 
 See `用户手册.md` for the Chinese user guide and `CHANGELOG.md` for progress.
+
+## Python file map
+
+- `main.py`: window setup, game states, input, combat, collisions and drawing.
+- `game_logic.py`: player stats, upgrades and level/experience formulas.
+- `tests/test_game_logic.py`: automated checks for the pure rules above.
