@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-08-26
+
+- Added a boss every 45 seconds with aimed spread-shot projectiles.
+- Added kill combos and score multipliers.
+- Added healing-core drops, damage invulnerability frames and player blinking.
+- Added a dash cooldown meter and encounter messages.
+
 ## 0.1.4 - 2026-08-26
 
 - Added Windows native physical-key polling when Pygame reports focus but misses keyboard input.

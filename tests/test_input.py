@@ -49,6 +49,13 @@ class InputTests(unittest.TestCase):
         self.assertEqual(self.game.state, "playing")
         self.assertEqual(self.game.score, 0)
 
+    def test_boss_has_expected_combat_properties(self):
+        self.game.spawn_boss()
+        boss = self.game.enemies[-1]
+        self.assertEqual(boss.kind, "BOSS")
+        self.assertGreaterEqual(boss.hp, 650)
+        self.assertEqual(boss.radius, 46)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,23 @@ class Enemy:
     speed: float
     radius: int
     kind: str
+    shoot_t: float = 0.0
+
+
+@dataclass
+class EnemyBullet:
+    """Boss 发射的敌方子弹。"""
+
+    pos: pygame.Vector2
+    vel: pygame.Vector2
+
+
+@dataclass
+class Pickup:
+    """敌人偶尔掉落的治疗核心。"""
+
+    pos: pygame.Vector2
+    life: float = 8.0
 
 
 class Game:
@@ -111,10 +128,16 @@ class Game:
 
         self.player = pygame.Vector2(W / 2, H / 2)
         self.stats, self.hp = Stats(), 100.0
-        self.bullets, self.enemies, self.particles = [], [], []
+        self.bullets, self.enemy_bullets = [], []
+        self.enemies, self.particles, self.pickups = [], [], []
         self.score = self.xp = 0
         self.level = 1
         self.time = self.shot_t = self.spawn_t = self.dash_t = 0.0
+        self.invulnerable_t = 0.0
+        self.combo = 0
+        self.combo_t = 0.0
+        self.next_boss_time = 45.0
+        self.wave_message_t = 2.0
         self.flash = self.shake = 0.0
         self.choices = []
         self.held_keys.clear()
@@ -221,6 +244,13 @@ class Game:
         scale = 1 + self.time / 170
         self.enemies.append(Enemy(pos, hp * scale, speed * min(1.55, scale), radius, kind))
 
+    def spawn_boss(self):
+        """在屏幕上方生成 Boss；每 45 秒出现一次。"""
+
+        hp = 650 + self.time * 4
+        self.enemies.append(Enemy(pygame.Vector2(W / 2, -55), hp, 62, 46, "BOSS", 1.0))
+        self.wave_message_t = 3.0
+
     def burst(self, pos, color, n=10):
         """在指定位置产生一圈向外飞散的粒子。"""
 
@@ -243,6 +273,11 @@ class Game:
         self.shot_t -= dt
         self.spawn_t -= dt
         self.dash_t -= dt
+        self.invulnerable_t -= dt
+        self.combo_t -= dt
+        self.wave_message_t -= dt
+        if self.combo_t <= 0:
+            self.combo = 0
 
         # ---------- 玩家移动 ----------
         move = self.movement_vector()
@@ -270,6 +305,9 @@ class Game:
             self.spawn_enemy()
             # 随生存时间缩短生成间隔，但最低保留 0.22 秒。
             self.spawn_t = max(.22, .82 - self.time * .006)
+        if self.time >= self.next_boss_time:
+            self.spawn_boss()
+            self.next_boss_time += 45
         for b in self.bullets:
             b.pos += b.vel * dt
         self.bullets = [b for b in self.bullets if -20 < b.pos.x < W + 20 and -20 < b.pos.y < H + 20]
@@ -277,11 +315,32 @@ class Game:
             delta = self.player - e.pos
             if delta.length_squared():
                 e.pos += delta.normalize() * e.speed * dt
-            if delta.length() < e.radius + 14:
+            if e.kind == "BOSS":
+                e.shoot_t -= dt
+                if e.shoot_t <= 0 and delta.length_squared():
+                    # Boss 每次扇形发射五颗子弹。
+                    base = math.atan2(delta.y, delta.x)
+                    for offset in (-.32, -.16, 0, .16, .32):
+                        vel = pygame.Vector2(math.cos(base + offset), math.sin(base + offset)) * 260
+                        self.enemy_bullets.append(EnemyBullet(e.pos.copy(), vel))
+                    e.shoot_t = 1.25
+            if delta.length() < e.radius + 14 and self.invulnerable_t <= 0:
                 # 伤害乘以 dt，避免帧率越高受伤越快。
-                self.hp -= 28 * dt
-                self.flash = .08
-                self.shake = 5
+                self.hp -= 16 if e.kind == "BOSS" else 10
+                self.invulnerable_t = .65
+                self.flash = .12
+                self.shake = 7
+
+        # 敌方子弹命中后消失，并触发短暂无敌帧。
+        for bullet in self.enemy_bullets:
+            bullet.pos += bullet.vel * dt
+        self.enemy_bullets = [b for b in self.enemy_bullets if -30 < b.pos.x < W + 30 and -30 < b.pos.y < H + 30]
+        for bullet in self.enemy_bullets[:]:
+            if bullet.pos.distance_to(self.player) < 19 and self.invulnerable_t <= 0:
+                self.enemy_bullets.remove(bullet)
+                self.hp -= 14
+                self.invulnerable_t = .65
+                self.flash = .12
 
         # ---------- 子弹与敌人的碰撞 ----------
         # 使用副本 [:] 遍历，因为命中时会从原列表删除子弹。
@@ -295,9 +354,23 @@ class Game:
         for e in self.enemies[:]:
             if e.hp <= 0:
                 self.enemies.remove(e)
-                self.score += 10 if e.kind != "TANK" else 30
-                self.xp += 18 if e.kind != "TANK" else 35
+                self.combo += 1
+                self.combo_t = 2.6
+                base_score = 250 if e.kind == "BOSS" else (30 if e.kind == "TANK" else 10)
+                self.score += int(base_score * (1 + min(20, self.combo) * .05))
+                self.xp += 150 if e.kind == "BOSS" else (35 if e.kind == "TANK" else 18)
+                if random.random() < (.55 if e.kind == "BOSS" else .06):
+                    self.pickups.append(Pickup(e.pos.copy()))
                 self.burst(e.pos, PINK, 14)
+
+        # 治疗核心会在八秒后消失，接触即可恢复 20 点生命。
+        for pickup in self.pickups:
+            pickup.life -= dt
+            if pickup.pos.distance_to(self.player) < 25:
+                self.hp = min(self.stats.max_hp, self.hp + 20)
+                pickup.life = 0
+                self.burst(pickup.pos, (80, 255, 130), 18)
+        self.pickups = [p for p in self.pickups if p.life > 0]
 
         # ---------- 升级、粒子和游戏结束 ----------
         new_level = level_for_xp(self.xp)
@@ -341,11 +414,20 @@ class Game:
             pygame.draw.circle(self.screen, p[3], p[0], max(1, int(4 * p[2] / .45)))
         for b in self.bullets:
             pygame.draw.line(self.screen, CYAN, b.pos - b.vel.normalize() * 13, b.pos, 4)
+        for b in self.enemy_bullets:
+            pygame.draw.circle(self.screen, RED, b.pos, 7)
+            pygame.draw.circle(self.screen, WHITE, b.pos, 3)
+        for pickup in self.pickups:
+            pulse = 8 + int(math.sin(self.time * 8) * 2)
+            pygame.draw.circle(self.screen, (80, 255, 130), pickup.pos, pulse, 3)
+            pygame.draw.line(self.screen, (80, 255, 130), pickup.pos + (-4, 0), pickup.pos + (4, 0), 2)
+            pygame.draw.line(self.screen, (80, 255, 130), pickup.pos + (0, -4), pickup.pos + (0, 4), 2)
         for e in self.enemies:
-            color = VIOLET if e.kind == "TANK" else PINK
+            color = RED if e.kind == "BOSS" else (VIOLET if e.kind == "TANK" else PINK)
             pygame.draw.circle(self.screen, color, e.pos, e.radius, 3)
             pygame.draw.circle(self.screen, color, e.pos, max(3, e.radius // 3))
-        pygame.draw.circle(self.screen, CYAN, self.player, 14, 3)
+        player_color = WHITE if self.invulnerable_t > 0 and int(self.time * 18) % 2 else CYAN
+        pygame.draw.circle(self.screen, player_color, self.player, 14, 3)
         aim = pygame.Vector2(pygame.mouse.get_pos()) - self.player
         if aim.length_squared():
             pygame.draw.line(self.screen, WHITE, self.player, self.player + aim.normalize() * 24, 3)
@@ -356,9 +438,18 @@ class Game:
         self.text(f"CORE {int(max(0,self.hp)):03d}/{self.stats.max_hp}", (28, 49), MUTED, self.small)
         self.text(f"SCORE {self.score:06d}", (W - 220, 24), WHITE)
         self.text(f"LEVEL {self.level:02d}", (W - 220, 52), CYAN)
+        if self.combo > 1:
+            self.text(f"COMBO x{self.combo}", (W - 220, 84), PINK)
+        dash_ready = clamp(1 - max(0, self.dash_t) / self.stats.dash_cooldown, 0, 1)
+        pygame.draw.rect(self.screen, (20, 32, 50), (28, 76, 150, 7))
+        pygame.draw.rect(self.screen, CYAN, (28, 76, 150 * dash_ready, 7))
+        self.text("DASH", (184, 69), MUTED, self.small)
         lo, hi = xp_floor(self.level), xp_ceiling(self.level)
         pygame.draw.rect(self.screen, (20, 32, 50), (28, H - 28, W - 56, 7))
         pygame.draw.rect(self.screen, CYAN, (28, H - 28, (W - 56) * (self.xp - lo) / max(1, hi - lo), 7))
+        if self.wave_message_t > 0:
+            message = "WARNING // BOSS SIGNAL" if self.time >= 44 else "BREACH INITIALIZED"
+            self.text(message, (W/2, 95), RED if "BOSS" in message else CYAN, self.font, True)
 
     def draw(self):
         """根据 self.state 在战场上覆盖对应的菜单界面。"""
