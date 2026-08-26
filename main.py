@@ -77,7 +77,9 @@ class Game:
         self.state = "menu"
         # 自己记录持续按住的键，比每帧查询键盘状态更稳定。
         self.held_keys: set[int] = set()
+        self.move_tap = pygame.Vector2()
         self.upgrade_cursor = 0
+        self.action_latched = False
         self.high = safe_load().get("high_score", 0)
         self.reset()
 
@@ -93,19 +95,70 @@ class Game:
         self.flash = self.shake = 0.0
         self.choices = []
         self.held_keys.clear()
+        self.move_tap.update(0, 0)
         self.upgrade_cursor = 0
+        self.action_latched = False
 
     def movement_vector(self):
         """根据当前按住的 WASD 或方向键计算移动方向。"""
 
-        left = pygame.K_a in self.held_keys or pygame.K_LEFT in self.held_keys
-        right = pygame.K_d in self.held_keys or pygame.K_RIGHT in self.held_keys
-        up = pygame.K_w in self.held_keys or pygame.K_UP in self.held_keys
-        down = pygame.K_s in self.held_keys or pygame.K_DOWN in self.held_keys
+        # 同时使用事件记录和实时键盘状态，两种输入方式互相兜底。
+        pressed = pygame.key.get_pressed()
+        left = pygame.K_a in self.held_keys or pygame.K_LEFT in self.held_keys or pressed[pygame.K_a] or pressed[pygame.K_LEFT]
+        right = pygame.K_d in self.held_keys or pygame.K_RIGHT in self.held_keys or pressed[pygame.K_d] or pressed[pygame.K_RIGHT]
+        up = pygame.K_w in self.held_keys or pygame.K_UP in self.held_keys or pressed[pygame.K_w] or pressed[pygame.K_UP]
+        down = pygame.K_s in self.held_keys or pygame.K_DOWN in self.held_keys or pressed[pygame.K_s] or pressed[pygame.K_DOWN]
         move = pygame.Vector2(right - left, down - up)
         if move.length_squared():
             move = move.normalize()
         return move
+
+    def note_movement_key(self, key):
+        """记录一次移动键按下，让很短的轻点也至少移动一小步。"""
+
+        directions = {
+            pygame.K_a: (-1, 0), pygame.K_LEFT: (-1, 0),
+            pygame.K_d: (1, 0), pygame.K_RIGHT: (1, 0),
+            pygame.K_w: (0, -1), pygame.K_UP: (0, -1),
+            pygame.K_s: (0, 1), pygame.K_DOWN: (0, 1),
+        }
+        if key in directions:
+            self.move_tap += pygame.Vector2(directions[key])
+
+    def restart(self):
+        """从死亡界面开始新的一局。"""
+
+        self.reset()
+        self.state = "playing"
+
+    def poll_state_controls(self):
+        """实时轮询菜单按键，防止某些电脑漏掉 KEYDOWN 事件。"""
+
+        pressed = pygame.key.get_pressed()
+        confirm = pressed[pygame.K_RETURN] or pressed[pygame.K_SPACE]
+        restart = pressed[pygame.K_r] or confirm
+        number = None
+        for index, keys in enumerate(((pygame.K_1, pygame.K_KP1), (pygame.K_2, pygame.K_KP2), (pygame.K_3, pygame.K_KP3))):
+            if any(pressed[key] for key in keys):
+                number = index
+                break
+
+        action_down = bool(confirm or restart or number is not None)
+        if action_down and not self.action_latched:
+            if self.state == "menu" and confirm:
+                self.reset()
+                self.state = "playing"
+            elif self.state == "dead" and restart:
+                self.restart()
+            elif self.state == "upgrade" and number is not None:
+                self.choose_upgrade(number)
+        self.action_latched = action_down
+
+    @staticmethod
+    def restart_rect():
+        """死亡界面的可点击重启按钮。"""
+
+        return pygame.Rect(W // 2 - 170, H // 2 + 5, 340, 70)
 
     def upgrade_rects(self):
         """返回三张升级卡片的位置，绘制和鼠标点击共用同一套坐标。"""
@@ -120,6 +173,7 @@ class Game:
         self.stats, self.hp = apply_upgrade(self.stats, self.hp, self.choices[index])
         self.state = "playing"
         self.held_keys.clear()
+        self.move_tap.update(0, 0)
 
     def spawn_enemy(self):
         """在屏幕四周随机生成一种敌人，并随生存时间增强它。"""
@@ -166,6 +220,10 @@ class Game:
         # ---------- 玩家移动 ----------
         move = self.movement_vector()
         self.player += move * self.stats.speed * dt
+        if self.move_tap.length_squared():
+            # 即使 KEYDOWN 和 KEYUP 落在同一帧，轻点也会移动 24 像素。
+            self.player += self.move_tap.normalize() * 24
+            self.move_tap.update(0, 0)
         self.player.x, self.player.y = clamp(self.player.x, 20, W - 20), clamp(self.player.y, 20, H - 20)
 
         # ---------- 瞄准和射击 ----------
@@ -292,7 +350,12 @@ class Game:
             self.text("// PAUSED", (W/2,H/2), WHITE, self.big, True)
         elif self.state == "dead":
             self.text("SIGNAL LOST", (W/2,H/2-60), RED, self.big, True)
-            self.text(f"SCORE {self.score:06d}   [R] REBOOT", (W/2,H/2+30), WHITE, self.font, True)
+            button = self.restart_rect()
+            hovered = button.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(self.screen, (28, 48, 70) if hovered else (12, 24, 45), button)
+            pygame.draw.rect(self.screen, PINK if hovered else CYAN, button, 3)
+            self.text(f"SCORE {self.score:06d}  //  REBOOT", button.center, WHITE, self.font, True)
+            self.text("R / ENTER / SPACE / CLICK", (W/2, button.bottom+28), MUTED, self.small, True)
         elif self.state == "upgrade":
             veil = pygame.Surface((W, H), pygame.SRCALPHA)
             veil.fill((2, 5, 15, 220))
@@ -315,6 +378,12 @@ class Game:
             f.fill((255, 30, 70, 65))
             self.screen.blit(f, (0, 0))
 
+        if not pygame.key.get_focused():
+            focus_box = pygame.Rect(W // 2 - 190, H - 72, 380, 42)
+            pygame.draw.rect(self.screen, (40, 12, 28), focus_box)
+            pygame.draw.rect(self.screen, PINK, focus_box, 2)
+            self.text("CLICK THE GAME WINDOW TO ENABLE KEYS", focus_box.center, WHITE, self.small, True)
+
         # 所有东西画完后，一次性把这一帧显示到窗口。
         pygame.display.flip()
 
@@ -331,15 +400,17 @@ class Game:
                 if event.type == pygame.KEYUP:
                     self.held_keys.discard(event.key)
                 if event.type == pygame.KEYDOWN:
+                    was_held = event.key in self.held_keys
                     self.held_keys.add(event.key)
+                    if not was_held:
+                        self.note_movement_key(event.key)
                     if event.key == pygame.K_RETURN and self.state == "menu":
                         self.reset()
                         self.state = "playing"
                     elif event.key == pygame.K_ESCAPE and self.state in ("playing", "paused"):
                         self.state = "paused" if self.state == "playing" else "playing"
-                    elif event.key == pygame.K_r and self.state == "dead":
-                        self.reset()
-                        self.state = "playing"
+                    elif self.state == "dead" and event.key in (pygame.K_r, pygame.K_RETURN, pygame.K_SPACE):
+                        self.restart()
                     elif self.state == "upgrade" and event.key in (
                         pygame.K_1, pygame.K_2, pygame.K_3,
                         pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
@@ -367,6 +438,11 @@ class Game:
                         if rect.collidepoint(event.pos):
                             self.choose_upgrade(index)
                             break
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "dead":
+                    if self.restart_rect().collidepoint(event.pos):
+                        self.restart()
+            # 菜单操作额外使用实时轮询，避免系统漏发单次按键事件。
+            self.poll_state_controls()
             self.update(dt)
             self.draw()
 

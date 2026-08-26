@@ -6,11 +6,12 @@ A neon arena survival game built with Python and Pygame for a school creative-pr
 
 On Windows, double-click `start.bat`. The first launch creates an isolated Python environment and installs Pygame.
 
-- `WASD` or arrow keys: move
+- `WASD` or arrow keys: move (a quick tap always produces a visible step)
 - Mouse: aim and hold left-click to fire
 - `Space`: dash
 - `Esc`: pause
 - Upgrade choice: click a card, press `1` / `2` / `3`, or use arrows and Enter
+- Defeat screen: press `R`, Enter, Space, or click the reboot button
 
 ## Development
 

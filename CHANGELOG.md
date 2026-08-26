@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - 2026-08-26
+
+- Added a minimum movement step for very short key taps.
+- Added Enter, Space and a clickable button as defeat-screen restart controls.
+- Added real-time keyboard polling as a fallback for missed key events.
+- Added an on-screen warning when the game window does not have keyboard focus.
+- Added regression tests for tap movement and restarting.
+
 ## 0.1.2 - 2026-08-26
 
 - Fixed unreliable movement input by tracking held key-down/key-up events.
