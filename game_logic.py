@@ -24,6 +24,7 @@ class Stats:
     bullet_speed: float = 720.0
     projectiles: int = 1
     dash_cooldown: float = 1.8
+    regen_per_tick: int = 0
 
 
 # 字典的键是程序内部使用的升级名称，值是升级界面显示的说明。
@@ -34,6 +35,7 @@ UPGRADES = {
     "MULTI SHOT": "+1 projectile",
     "CORE PATCH": "+25 max HP and heal 25",
     "PHASE DRIVE": "Dash recharges 20% faster",
+    "REGENERATION": "Heal +2 every 4 seconds (stacks)",
 }
 
 
@@ -54,6 +56,9 @@ def apply_upgrade(stats: Stats, hp: float, name: str) -> tuple[Stats, float]:
         hp = min(stats.max_hp, hp + 25)
     elif name == "PHASE DRIVE":
         stats.dash_cooldown = max(0.45, stats.dash_cooldown * 0.8)
+    elif name == "REGENERATION":
+        # 每次选择都增加每轮回血量，所以技能可以无限叠加。
+        stats.regen_per_tick += 2
     else:
         raise ValueError(f"Unknown upgrade: {name}")
     return stats, hp

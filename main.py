@@ -134,6 +134,7 @@ class Game:
         self.level = 1
         self.time = self.shot_t = self.spawn_t = self.dash_t = 0.0
         self.invulnerable_t = 0.0
+        self.regen_t = 4.0
         self.combo = 0
         self.combo_t = 0.0
         self.next_boss_time = 45.0
@@ -274,10 +275,20 @@ class Game:
         self.spawn_t -= dt
         self.dash_t -= dt
         self.invulnerable_t -= dt
+        self.regen_t -= dt
         self.combo_t -= dt
         self.wave_message_t -= dt
         if self.combo_t <= 0:
             self.combo = 0
+
+        # REGENERATION 每四秒结算一次；层数越高，每次恢复越多。
+        if self.regen_t <= 0:
+            if self.stats.regen_per_tick > 0 and self.hp < self.stats.max_hp:
+                old_hp = self.hp
+                self.hp = min(self.stats.max_hp, self.hp + self.stats.regen_per_tick)
+                if self.hp > old_hp:
+                    self.burst(self.player, (80, 255, 130), 12)
+            self.regen_t += 4.0
 
         # ---------- 玩家移动 ----------
         move = self.movement_vector()
@@ -440,6 +451,8 @@ class Game:
         self.text(f"LEVEL {self.level:02d}", (W - 220, 52), CYAN)
         if self.combo > 1:
             self.text(f"COMBO x{self.combo}", (W - 220, 84), PINK)
+        if self.stats.regen_per_tick > 0:
+            self.text(f"REGEN +{self.stats.regen_per_tick} / 4s", (W - 220, 112), (80, 255, 130), self.small)
         dash_ready = clamp(1 - max(0, self.dash_t) / self.stats.dash_cooldown, 0, 1)
         pygame.draw.rect(self.screen, (20, 32, 50), (28, 76, 150, 7))
         pygame.draw.rect(self.screen, CYAN, (28, 76, 150 * dash_ready, 7))

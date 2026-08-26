@@ -56,6 +56,16 @@ class InputTests(unittest.TestCase):
         self.assertGreaterEqual(boss.hp, 650)
         self.assertEqual(boss.radius, 46)
 
+    def test_regeneration_heals_on_four_second_tick(self):
+        self.game.stats.regen_per_tick = 4
+        self.game.hp = 50
+        self.game.regen_t = 0.01
+        self.game.state = "playing"
+        self.game.spawn_t = 999
+        self.game.update(0.02)
+        self.assertEqual(self.game.hp, 54)
+        self.assertGreater(self.game.regen_t, 3.9)
+
 
 if __name__ == "__main__":
     unittest.main()

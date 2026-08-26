@@ -22,6 +22,13 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(len(choices), len(set(choices)))
         self.assertEqual(len(choices), 3)
 
+    def test_regeneration_upgrade_stacks(self):
+        stats = Stats()
+        stats, hp = apply_upgrade(stats, 50, "REGENERATION")
+        stats, hp = apply_upgrade(stats, hp, "REGENERATION")
+        self.assertEqual(stats.regen_per_tick, 4)
+        self.assertEqual(hp, 50)
+
 
 if __name__ == "__main__":
     unittest.main()

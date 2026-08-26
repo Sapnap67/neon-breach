@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-08-26
+
+- Added the stackable `REGENERATION` upgrade.
+- Regeneration heals 2 HP per stack every four seconds without exceeding maximum HP.
+- Added a HUD status label and green healing particles when regeneration triggers.
+
 ## 0.2.0 - 2026-08-26
 
 - Added a boss every 45 seconds with aimed spread-shot projectiles.
