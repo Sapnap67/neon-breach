@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import math
 import random
+import sys
+import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +18,27 @@ W, H = 1280, 720
 BG, CYAN, PINK, VIOLET = (4, 7, 18), (40, 235, 255), (255, 45, 143), (145, 80, 255)
 WHITE, MUTED, RED = (235, 248, 255), (110, 142, 166), (255, 65, 80)
 SAVE = Path(__file__).with_name("save.json")
+
+# Windows 虚拟键码。某些机器上 Pygame 窗口有焦点却读不到键盘，
+# 所以 Windows 版会再直接查询一次物理按键状态。
+WINDOWS_VK = {
+    pygame.K_a: 0x41, pygame.K_d: 0x44, pygame.K_w: 0x57, pygame.K_s: 0x53,
+    pygame.K_r: 0x52, pygame.K_LEFT: 0x25, pygame.K_UP: 0x26,
+    pygame.K_RIGHT: 0x27, pygame.K_DOWN: 0x28, pygame.K_RETURN: 0x0D,
+    pygame.K_SPACE: 0x20, pygame.K_1: 0x31, pygame.K_2: 0x32, pygame.K_3: 0x33,
+    pygame.K_KP1: 0x61, pygame.K_KP2: 0x62, pygame.K_KP3: 0x63,
+}
+
+
+def physical_key_down(key):
+    """读取物理按键；Windows 原生读取作为 Pygame 的备用方案。"""
+
+    pressed = pygame.key.get_pressed()
+    if pressed[key]:
+        return True
+    if sys.platform == "win32" and key in WINDOWS_VK:
+        return bool(ctypes.windll.user32.GetAsyncKeyState(WINDOWS_VK[key]) & 0x8000)
+    return False
 
 
 def clamp(v, lo, hi):
@@ -103,11 +126,10 @@ class Game:
         """根据当前按住的 WASD 或方向键计算移动方向。"""
 
         # 同时使用事件记录和实时键盘状态，两种输入方式互相兜底。
-        pressed = pygame.key.get_pressed()
-        left = pygame.K_a in self.held_keys or pygame.K_LEFT in self.held_keys or pressed[pygame.K_a] or pressed[pygame.K_LEFT]
-        right = pygame.K_d in self.held_keys or pygame.K_RIGHT in self.held_keys or pressed[pygame.K_d] or pressed[pygame.K_RIGHT]
-        up = pygame.K_w in self.held_keys or pygame.K_UP in self.held_keys or pressed[pygame.K_w] or pressed[pygame.K_UP]
-        down = pygame.K_s in self.held_keys or pygame.K_DOWN in self.held_keys or pressed[pygame.K_s] or pressed[pygame.K_DOWN]
+        left = pygame.K_a in self.held_keys or pygame.K_LEFT in self.held_keys or physical_key_down(pygame.K_a) or physical_key_down(pygame.K_LEFT)
+        right = pygame.K_d in self.held_keys or pygame.K_RIGHT in self.held_keys or physical_key_down(pygame.K_d) or physical_key_down(pygame.K_RIGHT)
+        up = pygame.K_w in self.held_keys or pygame.K_UP in self.held_keys or physical_key_down(pygame.K_w) or physical_key_down(pygame.K_UP)
+        down = pygame.K_s in self.held_keys or pygame.K_DOWN in self.held_keys or physical_key_down(pygame.K_s) or physical_key_down(pygame.K_DOWN)
         move = pygame.Vector2(right - left, down - up)
         if move.length_squared():
             move = move.normalize()
@@ -134,12 +156,11 @@ class Game:
     def poll_state_controls(self):
         """实时轮询菜单按键，防止某些电脑漏掉 KEYDOWN 事件。"""
 
-        pressed = pygame.key.get_pressed()
-        confirm = pressed[pygame.K_RETURN] or pressed[pygame.K_SPACE]
-        restart = pressed[pygame.K_r] or confirm
+        confirm = physical_key_down(pygame.K_RETURN) or physical_key_down(pygame.K_SPACE)
+        restart = physical_key_down(pygame.K_r) or confirm
         number = None
         for index, keys in enumerate(((pygame.K_1, pygame.K_KP1), (pygame.K_2, pygame.K_KP2), (pygame.K_3, pygame.K_KP3))):
-            if any(pressed[key] for key in keys):
+            if any(physical_key_down(key) for key in keys):
                 number = index
                 break
 
@@ -159,6 +180,12 @@ class Game:
         """死亡界面的可点击重启按钮。"""
 
         return pygame.Rect(W // 2 - 170, H // 2 + 5, 340, 70)
+
+    @staticmethod
+    def start_rect():
+        """主菜单可点击的开始区域。"""
+
+        return pygame.Rect(W // 2 - 180, H // 2 + 20, 360, 70)
 
     def upgrade_rects(self):
         """返回三张升级卡片的位置，绘制和鼠标点击共用同一套坐标。"""
@@ -343,7 +370,11 @@ class Game:
             self.screen.blit(veil, (0, 0))
             self.text("NEON//BREACH", (W/2,H/2-85), CYAN, self.big, True)
             self.text("SURVIVE THE SYSTEM COLLAPSE", (W/2,H/2-20), MUTED, self.font, True)
-            self.text("[ ENTER ] INITIALIZE", (W/2,H/2+55), WHITE, self.font, True)
+            start_button = self.start_rect()
+            hovered = start_button.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(self.screen, (20, 40, 62) if hovered else (10, 20, 36), start_button)
+            pygame.draw.rect(self.screen, PINK if hovered else CYAN, start_button, 3)
+            self.text("[ ENTER / CLICK ] INITIALIZE", start_button.center, WHITE, self.font, True)
             self.text("WASD move  |  mouse aim/fire  |  SPACE dash  |  ESC pause", (W/2,H-70), MUTED, self.small, True)
             self.text(f"HIGH SCORE {self.high:06d}", (W/2,H/2+100), PINK, self.small, True)
         elif self.state == "paused":
@@ -441,6 +472,10 @@ class Game:
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "dead":
                     if self.restart_rect().collidepoint(event.pos):
                         self.restart()
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "menu":
+                    if self.start_rect().collidepoint(event.pos):
+                        self.reset()
+                        self.state = "playing"
             # 菜单操作额外使用实时轮询，避免系统漏发单次按键事件。
             self.poll_state_controls()
             self.update(dt)

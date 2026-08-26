@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 - 2026-08-26
+
+- Added Windows native physical-key polling when Pygame reports focus but misses keyboard input.
+- Made the main-menu initialize control clickable.
+
 ## 0.1.3 - 2026-08-26
 
 - Added a minimum movement step for very short key taps.
