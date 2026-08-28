@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3 - 2026-08-28
+
+- Added the stackable `RESISTANCE` upgrade.
+- Each stack reduces incoming damage by 12%, capped at 60% damage reduction.
+- Added the current resistance percentage to the live attributes panel.
+
 ## 0.2.2 - 2026-08-28
 
 - Added a live `CORE ATTRIBUTES` panel in the upper-right corner.

@@ -70,10 +70,12 @@ class InputTests(unittest.TestCase):
         self.game.stats.damage = 32
         self.game.stats.projectiles = 3
         self.game.stats.regen_per_tick = 6
+        self.game.stats.resistance = .24
         rows = dict(self.game.stat_lines())
         self.assertEqual(rows["DAMAGE"], "32")
         self.assertEqual(rows["PROJECTILES"], "3")
         self.assertEqual(rows["REGEN"], "+6 / 4s")
+        self.assertEqual(rows["RESISTANCE"], "24%")
 
 
 if __name__ == "__main__":

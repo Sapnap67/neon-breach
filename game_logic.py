@@ -25,6 +25,7 @@ class Stats:
     projectiles: int = 1
     dash_cooldown: float = 1.8
     regen_per_tick: int = 0
+    resistance: float = 0.0
 
 
 # 字典的键是程序内部使用的升级名称，值是升级界面显示的说明。
@@ -36,6 +37,7 @@ UPGRADES = {
     "CORE PATCH": "+25 max HP and heal 25",
     "PHASE DRIVE": "Dash recharges 20% faster",
     "REGENERATION": "Heal +2 every 4 seconds (stacks)",
+    "RESISTANCE": "Take 12% less damage (max 60%)",
 }
 
 
@@ -59,6 +61,9 @@ def apply_upgrade(stats: Stats, hp: float, name: str) -> tuple[Stats, float]:
     elif name == "REGENERATION":
         # 每次选择都增加每轮回血量，所以技能可以无限叠加。
         stats.regen_per_tick += 2
+    elif name == "RESISTANCE":
+        # 抗性可以叠加，但限制在 60%，避免玩家完全免疫伤害。
+        stats.resistance = min(0.60, stats.resistance + 0.12)
     else:
         raise ValueError(f"Unknown upgrade: {name}")
     return stats, hp
@@ -68,6 +73,13 @@ def level_for_xp(xp: int) -> int:
     """根据累计经验值计算当前等级。等级越高，升级所需经验越多。"""
 
     return 1 + int(math.sqrt(max(0, xp) / 60))
+
+
+def damage_after_resistance(amount: float, resistance: float) -> float:
+    """计算抗性减免后的实际伤害。"""
+
+    resistance = max(0.0, min(0.60, resistance))
+    return amount * (1 - resistance)
 
 
 def xp_floor(level: int) -> int:

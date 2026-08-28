@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from game_logic import Stats, apply_upgrade, level_for_xp, upgrade_choices, xp_ceiling, xp_floor
+from game_logic import Stats, apply_upgrade, damage_after_resistance, level_for_xp, upgrade_choices, xp_ceiling, xp_floor
 
 
 class GameLogicTests(unittest.TestCase):
@@ -28,6 +28,13 @@ class GameLogicTests(unittest.TestCase):
         stats, hp = apply_upgrade(stats, hp, "REGENERATION")
         self.assertEqual(stats.regen_per_tick, 4)
         self.assertEqual(hp, 50)
+
+    def test_resistance_stacks_and_caps_at_sixty_percent(self):
+        stats = Stats()
+        for _ in range(8):
+            stats, _ = apply_upgrade(stats, 100, "RESISTANCE")
+        self.assertAlmostEqual(stats.resistance, 0.60)
+        self.assertAlmostEqual(damage_after_resistance(20, stats.resistance), 8)
 
 
 if __name__ == "__main__":

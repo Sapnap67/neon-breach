@@ -10,7 +10,16 @@ from pathlib import Path
 
 import pygame
 
-from game_logic import Stats, UPGRADES, apply_upgrade, level_for_xp, upgrade_choices, xp_ceiling, xp_floor
+from game_logic import (
+    Stats,
+    UPGRADES,
+    apply_upgrade,
+    damage_after_resistance,
+    level_for_xp,
+    upgrade_choices,
+    xp_ceiling,
+    xp_floor,
+)
 
 # ---------- 全局设置：窗口、颜色和存档位置 ----------
 
@@ -337,7 +346,8 @@ class Game:
                     e.shoot_t = 1.25
             if delta.length() < e.radius + 14 and self.invulnerable_t <= 0:
                 # 伤害乘以 dt，避免帧率越高受伤越快。
-                self.hp -= 16 if e.kind == "BOSS" else 10
+                raw_damage = 16 if e.kind == "BOSS" else 10
+                self.hp -= damage_after_resistance(raw_damage, self.stats.resistance)
                 self.invulnerable_t = .65
                 self.flash = .12
                 self.shake = 7
@@ -349,7 +359,7 @@ class Game:
         for bullet in self.enemy_bullets[:]:
             if bullet.pos.distance_to(self.player) < 19 and self.invulnerable_t <= 0:
                 self.enemy_bullets.remove(bullet)
-                self.hp -= 14
+                self.hp -= damage_after_resistance(14, self.stats.resistance)
                 self.invulnerable_t = .65
                 self.flash = .12
 
@@ -423,19 +433,21 @@ class Game:
             ("PROJECTILES", str(self.stats.projectiles)),
             ("DASH COOLDOWN", f"{self.stats.dash_cooldown:.2f}s"),
             ("REGEN", f"+{self.stats.regen_per_tick} / 4s"),
+            ("RESISTANCE", f"{self.stats.resistance:.0%}"),
         ]
 
     def draw_stats_panel(self):
         """绘制右上角的实时玩家属性面板。"""
 
-        panel = pygame.Rect(W - 286, 92, 258, 190)
+        panel = pygame.Rect(W - 286, 92, 258, 213)
         pygame.draw.rect(self.screen, (7, 16, 30), panel)
         pygame.draw.rect(self.screen, (24, 66, 82), panel, 2)
         self.text("// CORE ATTRIBUTES", (panel.x + 14, panel.y + 12), CYAN, self.small)
         for row, (label, value) in enumerate(self.stat_lines()):
             y = panel.y + 42 + row * 23
             self.text(label, (panel.x + 14, y), MUTED, self.small)
-            value_image = self.small.render(value, True, (80, 255, 130) if label == "REGEN" else WHITE)
+            special = label in ("REGEN", "RESISTANCE")
+            value_image = self.small.render(value, True, (80, 255, 130) if special else WHITE)
             self.screen.blit(value_image, (panel.right - 14 - value_image.get_width(), y))
 
     def draw_world(self):
