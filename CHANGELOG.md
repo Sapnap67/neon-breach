@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5 - 2026-08-28
+
+- Changed all regular enemy spawns to the right edge of the arena.
+- Replaced timed boss encounters with level 10, 20, 30 and later ten-level milestones.
+- Scaled later boss health, speed, bullet count, projectile speed, fire rate, damage and rewards.
+- Updated boss warnings to show the triggering level.
+
 ## 0.2.4 - 2026-08-28
 
 - Removed `RESISTANCE` from future upgrade choices after reaching the 60% cap.

@@ -93,6 +93,7 @@ class Enemy:
     radius: int
     kind: str
     shoot_t: float = 0.0
+    power: int = 1
 
 
 @dataclass
@@ -146,8 +147,9 @@ class Game:
         self.regen_t = 4.0
         self.combo = 0
         self.combo_t = 0.0
-        self.next_boss_time = 45.0
+        self.next_boss_level = 10
         self.wave_message_t = 2.0
+        self.wave_message = "BREACH INITIALIZED"
         self.flash = self.shake = 0.0
         self.choices = []
         self.held_keys.clear()
@@ -236,12 +238,10 @@ class Game:
         self.move_tap.update(0, 0)
 
     def spawn_enemy(self):
-        """在屏幕四周随机生成一种敌人，并随生存时间增强它。"""
+        """从屏幕右侧生成一种敌人，并随生存时间增强它。"""
 
-        # 0/1/2/3 分别代表上、右、下、左四条边。
-        side = random.randrange(4)
-        pos = [pygame.Vector2(random.randrange(W), -30), pygame.Vector2(W + 30, random.randrange(H)),
-               pygame.Vector2(random.randrange(W), H + 30), pygame.Vector2(-30, random.randrange(H))][side]
+        # 固定从右边进入，让玩家能形成明确的防线和走位方向。
+        pos = pygame.Vector2(W + 30, random.randrange(35, H - 35))
         # roll 决定敌人类型；游戏前期不会出现 TANK，之后概率逐渐增加。
         roll = random.random()
         if roll < min(.2, self.time / 150):
@@ -254,12 +254,17 @@ class Game:
         scale = 1 + self.time / 170
         self.enemies.append(Enemy(pos, hp * scale, speed * min(1.55, scale), radius, kind))
 
-    def spawn_boss(self):
-        """在屏幕上方生成 Boss；每 45 秒出现一次。"""
+    def spawn_boss(self, boss_level=None):
+        """从右侧生成关卡 Boss；10、20、30……级时出现。"""
 
-        hp = 650 + self.time * 4
-        self.enemies.append(Enemy(pygame.Vector2(W / 2, -55), hp, 62, 46, "BOSS", 1.0))
+        boss_level = boss_level or self.level
+        tier = max(1, boss_level // 10)
+        hp = 700 * (1 + .45 * (tier - 1))
+        speed = 65 + 6 * (tier - 1)
+        radius = 46 + min(10, 2 * (tier - 1))
+        self.enemies.append(Enemy(pygame.Vector2(W + 65, H / 2), hp, speed, radius, "BOSS", .8, tier))
         self.wave_message_t = 3.0
+        self.wave_message = f"WARNING // LEVEL {boss_level} BOSS"
 
     def burst(self, pos, color, n=10):
         """在指定位置产生一圈向外飞散的粒子。"""
@@ -325,9 +330,6 @@ class Game:
             self.spawn_enemy()
             # 随生存时间缩短生成间隔，但最低保留 0.22 秒。
             self.spawn_t = max(.22, .82 - self.time * .006)
-        if self.time >= self.next_boss_time:
-            self.spawn_boss()
-            self.next_boss_time += 45
         for b in self.bullets:
             b.pos += b.vel * dt
         self.bullets = [b for b in self.bullets if -20 < b.pos.x < W + 20 and -20 < b.pos.y < H + 20]
@@ -338,15 +340,18 @@ class Game:
             if e.kind == "BOSS":
                 e.shoot_t -= dt
                 if e.shoot_t <= 0 and delta.length_squared():
-                    # Boss 每次扇形发射五颗子弹。
+                    # Boss 阶数越高，弹幕越密、弹速越快、射击间隔越短。
                     base = math.atan2(delta.y, delta.x)
-                    for offset in (-.32, -.16, 0, .16, .32):
-                        vel = pygame.Vector2(math.cos(base + offset), math.sin(base + offset)) * 260
+                    shot_count = min(11, 3 + 2 * e.power)
+                    offsets = [(i - (shot_count - 1) / 2) * .14 for i in range(shot_count)]
+                    for offset in offsets:
+                        bullet_speed = 260 + 25 * (e.power - 1)
+                        vel = pygame.Vector2(math.cos(base + offset), math.sin(base + offset)) * bullet_speed
                         self.enemy_bullets.append(EnemyBullet(e.pos.copy(), vel))
-                    e.shoot_t = 1.25
+                    e.shoot_t = max(.55, 1.25 - .1 * (e.power - 1))
             if delta.length() < e.radius + 14 and self.invulnerable_t <= 0:
                 # 伤害乘以 dt，避免帧率越高受伤越快。
-                raw_damage = 16 if e.kind == "BOSS" else 10
+                raw_damage = 16 + 2 * (e.power - 1) if e.kind == "BOSS" else 10
                 self.hp -= damage_after_resistance(raw_damage, self.stats.resistance)
                 self.invulnerable_t = .65
                 self.flash = .12
@@ -359,7 +364,8 @@ class Game:
         for bullet in self.enemy_bullets[:]:
             if bullet.pos.distance_to(self.player) < 19 and self.invulnerable_t <= 0:
                 self.enemy_bullets.remove(bullet)
-                self.hp -= damage_after_resistance(14, self.stats.resistance)
+                boss_power = max((e.power for e in self.enemies if e.kind == "BOSS"), default=1)
+                self.hp -= damage_after_resistance(14 + 2 * (boss_power - 1), self.stats.resistance)
                 self.invulnerable_t = .65
                 self.flash = .12
 
@@ -377,9 +383,9 @@ class Game:
                 self.enemies.remove(e)
                 self.combo += 1
                 self.combo_t = 2.6
-                base_score = 250 if e.kind == "BOSS" else (30 if e.kind == "TANK" else 10)
+                base_score = 250 * e.power if e.kind == "BOSS" else (30 if e.kind == "TANK" else 10)
                 self.score += int(base_score * (1 + min(20, self.combo) * .05))
-                self.xp += 150 if e.kind == "BOSS" else (35 if e.kind == "TANK" else 18)
+                self.xp += 150 * e.power if e.kind == "BOSS" else (35 if e.kind == "TANK" else 18)
                 if random.random() < (.55 if e.kind == "BOSS" else .06):
                     self.pickups.append(Pickup(e.pos.copy()))
                 self.burst(e.pos, PINK, 14)
@@ -397,6 +403,9 @@ class Game:
         new_level = level_for_xp(self.xp)
         if new_level > self.level:
             self.level = new_level
+            if new_level >= self.next_boss_level:
+                self.spawn_boss(self.next_boss_level)
+                self.next_boss_level = (new_level // 10 + 1) * 10
             self.choices = upgrade_choices(stats=self.stats)
             self.state = "upgrade"
         for p in self.particles:
@@ -498,8 +507,7 @@ class Game:
         pygame.draw.rect(self.screen, (20, 32, 50), (28, H - 28, W - 56, 7))
         pygame.draw.rect(self.screen, CYAN, (28, H - 28, (W - 56) * (self.xp - lo) / max(1, hi - lo), 7))
         if self.wave_message_t > 0:
-            message = "WARNING // BOSS SIGNAL" if self.time >= 44 else "BREACH INITIALIZED"
-            self.text(message, (W/2, 95), RED if "BOSS" in message else CYAN, self.font, True)
+            self.text(self.wave_message, (W/2, 95), RED if "BOSS" in self.wave_message else CYAN, self.font, True)
 
     def draw(self):
         """根据 self.state 在战场上覆盖对应的菜单界面。"""

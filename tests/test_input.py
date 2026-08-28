@@ -5,7 +5,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame
 
-from main import Game
+from main import Game, W
 
 
 class InputTests(unittest.TestCase):
@@ -50,11 +50,26 @@ class InputTests(unittest.TestCase):
         self.assertEqual(self.game.score, 0)
 
     def test_boss_has_expected_combat_properties(self):
-        self.game.spawn_boss()
+        self.game.spawn_boss(10)
         boss = self.game.enemies[-1]
         self.assertEqual(boss.kind, "BOSS")
-        self.assertGreaterEqual(boss.hp, 650)
+        self.assertGreaterEqual(boss.hp, 700)
         self.assertEqual(boss.radius, 46)
+        self.assertGreater(boss.pos.x, W)
+
+    def test_regular_enemies_always_spawn_from_right_edge(self):
+        for _ in range(20):
+            self.game.spawn_enemy()
+        self.assertTrue(all(enemy.pos.x > W for enemy in self.game.enemies))
+
+    def test_later_boss_tiers_are_stronger(self):
+        self.game.spawn_boss(10)
+        first = self.game.enemies[-1]
+        self.game.spawn_boss(20)
+        second = self.game.enemies[-1]
+        self.assertGreater(second.hp, first.hp)
+        self.assertGreater(second.speed, first.speed)
+        self.assertGreater(second.power, first.power)
 
     def test_regeneration_heals_on_four_second_tick(self):
         self.game.stats.regen_per_tick = 4
