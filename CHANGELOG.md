@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 - 2026-08-28
+
+- Removed `RESISTANCE` from future upgrade choices after reaching the 60% cap.
+- Added regression coverage for capped and uncapped resistance pools.
+
 ## 0.2.3 - 2026-08-28
 
 - Added the stackable `RESISTANCE` upgrade.

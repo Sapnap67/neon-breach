@@ -397,7 +397,7 @@ class Game:
         new_level = level_for_xp(self.xp)
         if new_level > self.level:
             self.level = new_level
-            self.choices = upgrade_choices()
+            self.choices = upgrade_choices(stats=self.stats)
             self.state = "upgrade"
         for p in self.particles:
             p[0] += p[1] * dt

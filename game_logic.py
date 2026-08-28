@@ -94,8 +94,15 @@ def xp_ceiling(level: int) -> int:
     return 60 * level**2
 
 
-def upgrade_choices(rng: random.Random | None = None, count: int = 3) -> list[str]:
-    """不重复地随机抽出升级选项；传入固定 rng 可以稳定地进行测试。"""
+def upgrade_choices(
+    rng: random.Random | None = None,
+    count: int = 3,
+    stats: Stats | None = None,
+) -> list[str]:
+    """不重复地随机抽出有效升级；已经满级的抗性不会再次出现。"""
 
     rng = rng or random.Random()
-    return rng.sample(list(UPGRADES), min(count, len(UPGRADES)))
+    available = list(UPGRADES)
+    if stats is not None and stats.resistance >= 0.60 - 1e-9:
+        available.remove("RESISTANCE")
+    return rng.sample(available, min(count, len(available)))

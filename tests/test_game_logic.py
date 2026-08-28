@@ -36,6 +36,15 @@ class GameLogicTests(unittest.TestCase):
         self.assertAlmostEqual(stats.resistance, 0.60)
         self.assertAlmostEqual(damage_after_resistance(20, stats.resistance), 8)
 
+    def test_maxed_resistance_is_removed_from_upgrade_pool(self):
+        stats = Stats(resistance=0.60)
+        for seed in range(30):
+            choices = upgrade_choices(random.Random(seed), count=20, stats=stats)
+            self.assertNotIn("RESISTANCE", choices)
+
+        available_choices = upgrade_choices(random.Random(1), count=20, stats=Stats(resistance=.48))
+        self.assertIn("RESISTANCE", available_choices)
+
 
 if __name__ == "__main__":
     unittest.main()
