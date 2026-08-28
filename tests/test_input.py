@@ -66,6 +66,15 @@ class InputTests(unittest.TestCase):
         self.assertEqual(self.game.hp, 54)
         self.assertGreater(self.game.regen_t, 3.9)
 
+    def test_stats_panel_reflects_upgraded_values(self):
+        self.game.stats.damage = 32
+        self.game.stats.projectiles = 3
+        self.game.stats.regen_per_tick = 6
+        rows = dict(self.game.stat_lines())
+        self.assertEqual(rows["DAMAGE"], "32")
+        self.assertEqual(rows["PROJECTILES"], "3")
+        self.assertEqual(rows["REGEN"], "+6 / 4s")
+
 
 if __name__ == "__main__":
     unittest.main()

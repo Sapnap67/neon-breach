@@ -412,6 +412,32 @@ class Game:
             rect.topleft = pos
         self.screen.blit(img, rect)
 
+    def stat_lines(self):
+        """返回右上角属性面板的文字；属性变化后会自动反映在这里。"""
+
+        fire_rate = 1 / self.stats.fire_delay
+        return [
+            ("DAMAGE", f"{self.stats.damage:.0f}"),
+            ("MOVE SPEED", f"{self.stats.speed:.0f}"),
+            ("FIRE RATE", f"{fire_rate:.1f}/s"),
+            ("PROJECTILES", str(self.stats.projectiles)),
+            ("DASH COOLDOWN", f"{self.stats.dash_cooldown:.2f}s"),
+            ("REGEN", f"+{self.stats.regen_per_tick} / 4s"),
+        ]
+
+    def draw_stats_panel(self):
+        """绘制右上角的实时玩家属性面板。"""
+
+        panel = pygame.Rect(W - 286, 92, 258, 190)
+        pygame.draw.rect(self.screen, (7, 16, 30), panel)
+        pygame.draw.rect(self.screen, (24, 66, 82), panel, 2)
+        self.text("// CORE ATTRIBUTES", (panel.x + 14, panel.y + 12), CYAN, self.small)
+        for row, (label, value) in enumerate(self.stat_lines()):
+            y = panel.y + 42 + row * 23
+            self.text(label, (panel.x + 14, y), MUTED, self.small)
+            value_image = self.small.render(value, True, (80, 255, 130) if label == "REGEN" else WHITE)
+            self.screen.blit(value_image, (panel.right - 14 - value_image.get_width(), y))
+
     def draw_world(self):
         """绘制战场、实体和 HUD，不处理菜单等覆盖层。"""
 
@@ -450,9 +476,8 @@ class Game:
         self.text(f"SCORE {self.score:06d}", (W - 220, 24), WHITE)
         self.text(f"LEVEL {self.level:02d}", (W - 220, 52), CYAN)
         if self.combo > 1:
-            self.text(f"COMBO x{self.combo}", (W - 220, 84), PINK)
-        if self.stats.regen_per_tick > 0:
-            self.text(f"REGEN +{self.stats.regen_per_tick} / 4s", (W - 220, 112), (80, 255, 130), self.small)
+            self.text(f"COMBO x{self.combo}", (W - 440, 52), PINK)
+        self.draw_stats_panel()
         dash_ready = clamp(1 - max(0, self.dash_t) / self.stats.dash_cooldown, 0, 1)
         pygame.draw.rect(self.screen, (20, 32, 50), (28, 76, 150, 7))
         pygame.draw.rect(self.screen, CYAN, (28, 76, 150 * dash_ready, 7))

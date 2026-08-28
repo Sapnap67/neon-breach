@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 - 2026-08-28
+
+- Added a live `CORE ATTRIBUTES` panel in the upper-right corner.
+- Displayed damage, movement speed, fire rate, projectile count, dash cooldown and regeneration.
+- Made the panel update immediately after upgrades are applied.
+
 ## 0.2.1 - 2026-08-26
 
 - Added the stackable `REGENERATION` upgrade.
