@@ -2,6 +2,8 @@
 
 A neon arena survival game built with Python and Pygame for a school creative-programming project.
 
+Regular enemies enter from the top, bottom and right edges, while the left edge remains a limited escape route. Bosses still arrive at levels 10, 20, 30 and later ten-level milestones.
+
 ## Play
 
 On Windows, double-click `start.bat`. The first launch creates an isolated Python environment and installs Pygame.

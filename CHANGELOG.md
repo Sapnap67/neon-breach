@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 - 2026-08-29
+
+- Expanded regular enemy spawns from one edge to the top, bottom and right edges.
+- Kept the left edge as a limited retreat route and preserved right-side boss entrances.
+- Added deterministic coverage for all three regular-enemy spawn edges.
+
 ## 0.2.5 - 2026-08-28
 
 - Changed all regular enemy spawns to the right edge of the arena.

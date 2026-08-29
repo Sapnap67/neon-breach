@@ -238,10 +238,16 @@ class Game:
         self.move_tap.update(0, 0)
 
     def spawn_enemy(self):
-        """从屏幕右侧生成一种敌人，并随生存时间增强它。"""
+        """从上、下、右三侧生成一种敌人，并随生存时间增强它。"""
 
-        # 固定从右边进入，让玩家能形成明确的防线和走位方向。
-        pos = pygame.Vector2(W + 30, random.randrange(35, H - 35))
+        # 左侧保留为相对安全的撤退方向，其余三边等概率施加压力。
+        edge = random.choice(("top", "bottom", "right"))
+        if edge == "top":
+            pos = pygame.Vector2(random.randrange(35, W - 35), -30)
+        elif edge == "bottom":
+            pos = pygame.Vector2(random.randrange(35, W - 35), H + 30)
+        else:
+            pos = pygame.Vector2(W + 30, random.randrange(35, H - 35))
         # roll 决定敌人类型；游戏前期不会出现 TANK，之后概率逐渐增加。
         roll = random.random()
         if roll < min(.2, self.time / 150):

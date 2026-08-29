@@ -1,11 +1,12 @@
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame
 
-from main import Game, W
+from main import Game, H, W
 
 
 class InputTests(unittest.TestCase):
@@ -57,10 +58,17 @@ class InputTests(unittest.TestCase):
         self.assertEqual(boss.radius, 46)
         self.assertGreater(boss.pos.x, W)
 
-    def test_regular_enemies_always_spawn_from_right_edge(self):
-        for _ in range(20):
-            self.game.spawn_enemy()
-        self.assertTrue(all(enemy.pos.x > W for enemy in self.game.enemies))
+    def test_regular_enemies_spawn_from_top_bottom_and_right_edges(self):
+        positions = {}
+        for edge in ("top", "bottom", "right"):
+            with patch("main.random.choice", return_value=edge):
+                self.game.spawn_enemy()
+            positions[edge] = self.game.enemies[-1].pos
+
+        self.assertLess(positions["top"].y, 0)
+        self.assertGreater(positions["bottom"].y, H)
+        self.assertGreater(positions["right"].x, W)
+        self.assertTrue(all(pos.x >= 0 for pos in positions.values()))
 
     def test_later_boss_tiers_are_stronger(self):
         self.game.spawn_boss(10)
